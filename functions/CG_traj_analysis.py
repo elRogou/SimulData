@@ -2,8 +2,6 @@
 # To add a new markdown cell, type '# %% [markdown]'
 
 # %%
-from traj.Trajectory_CG import *
-from top.Toplogy_CG import *
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt

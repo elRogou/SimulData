@@ -9,7 +9,7 @@ from MDAnalysis.lib.distances import calc_dihedrals
 import copy
 from top.HPSparams import *
 
-# %%
+# %% ---------------------------------------------------------------------------
 def ParseCoordinates(s):
     n = [5,4,4,3,8,8,8,8]
     idx_str, index_str, name, residue, x_str, y_str, z_str, mass_str \
@@ -19,7 +19,7 @@ def ParseCoordinates(s):
     = int(idx_str), int(index_str), float(x_str), float(y_str), float(z_str), float(mass_str)
     return idx, index, name, residue, x, y, z, mass
 
-# %%
+# %% ---------------------------------------------------------------------------
 class bondedPair:
     """
     
@@ -42,7 +42,7 @@ class bondedPair:
                         self.length, self.epsilon)
         return self.msg
 
-# %%
+# %% ---------------------------------------------------------------------------
 class dihedralQuart:
     """
    
@@ -65,7 +65,7 @@ class dihedralQuart:
                         self.idx, *self.ijkl, self.angle, self.kd, self.arg1, self.arg2)
         return self.msg
 
-# %%
+# %% ---------------------------------------------------------------------------
 class angleTrio:
     """
     
@@ -87,7 +87,7 @@ class angleTrio:
                         self.angle, self.epsilon)
         return self.msg
 
-# %%
+# %% ---------------------------------------------------------------------------
 class dbG_dihedralQuart:
     """
     
@@ -117,7 +117,7 @@ class dbG_dihedralQuart:
                     self.sig2, self.a, self.phase)
         return self.msg
 
-# %%
+# %% ---------------------------------------------------------------------------
 class contact:
     """
     
@@ -138,7 +138,7 @@ class contact:
                     self.idx, *self.ij, self.r2, self.epsilon)
         return self.msg
 
-# %%
+# %% ---------------------------------------------------------------------------
 class dbG_contact:
     """
     
@@ -165,7 +165,7 @@ class dbG_contact:
                     self.sig2, self.a)
         return self.msg
 
-# %%
+# %% ---------------------------------------------------------------------------
 class  repulsivePair:
     """
     
@@ -188,7 +188,7 @@ class  repulsivePair:
                     self.r2, self.epsilon)
         return self.msg
 
-# %%
+# %% ---------------------------------------------------------------------------
 class electrostaticResidue:
     """
     
@@ -205,7 +205,7 @@ class electrostaticResidue:
                     self.idx, self.residx, self.charge)
         return self.msg
 
-# %%
+# %% ---------------------------------------------------------------------------
 class chiralConstraint:
     """
     (5I5,2F8.3)
@@ -231,7 +231,7 @@ class chiralConstraint:
                     self.kd)
         return self.msg
 
-# %%
+# %% ---------------------------------------------------------------------------
 class atomPosition:
     """
     (I5,I4,A4,A3,4F8.3)
@@ -279,7 +279,7 @@ class atomPosition:
             
         return dihedral
 
-# %%
+# %% ---------------------------------------------------------------------------
 class topologyFile:
     """
     
@@ -587,12 +587,17 @@ class Topology:
 
     def __removeRepulsionPair(self):
         for key in list(self.contacts.keys()):
-            if key in self.repulsive.keys():
-                del self.repulsive[key]
-                print(f'deleted: {key}')
-            elif (key[1],key[0]) in self.repulsive.keys():
-                del self.repulsive[(key[1],key[0])]
-                print(f'deleted: {key}')
+            self.removeOneRepulsion(key[0],key[1])
+
+    def removeOneRepulsion(self,i,j):
+        if (i,j) in self.repulsive.keys():
+            del self.repulsive[(i,j)]
+            print(f'Repulsion pair {i} {j} was removed')
+        if (j,i) in self.repulsive.keys():
+            del self.repulsive[(j,i)]
+            print(f'Repulsion pair {j} {i} was removed')
+        else:
+            print(f'Repulsion pair {i} {j} was not found')
 
     def __defineHPScontacts(self,ranges,structured,cModel,epsilon):
         # hps contacts of the one chain with itself
@@ -621,6 +626,23 @@ class Topology:
                             if abs(i-j) > repulsivePair.non_repulsive_chunk:
                                 self.__createHPScontact(i,j,cModel,epsilon)
 
+    def createContact(self,i,j,epsilon,r2=0):
+        idx = len(self.contacts.keys())+1
+        if not r2:
+            r2 = self.__getDistance(i,j)**2
+        contact_object = contact(idx,i,j,r2,epsilon)
+        self.__appendObject(contact_object,self.contacts)
+        self.removeOneRepulsion(i,j)
+        self.updateSection(self.contacts,self.contacts)
+        self.updateSection(self.repulsive,self.repulsive)
+
+    def __getDistance(self,i,j):
+        for chain in self.positions.keys():
+            if i in self.positions[chain].keys():
+                chaini = chain
+            if j in self.positions[chain].keys():
+                chainj = chain
+        return self.positions[chaini][i].get_distance(self.positions[chainj][j])
 
     def __getHPSparams(self,i,j,cModel,epsilon):
         # read the params file
@@ -1104,11 +1126,13 @@ class Topology:
                             value.index in range(i_value.index - 5, i_value.index + 5):
                             pass
                         else:
-                            repulsion_object = self.__createRepulsionsObject(value, i_value,ctype='dnadna')
+                            repulsion_object = self.__createRepulsionsObject(value,
+                            i_value,
+                            ctype='dnadna')
                             self.__appendObject(repulsion_object, self.repulsive)
 #                             print(f'found repuslion {(value.index, i_value.index)}')
                             
-    def __createRepulsionsObject(self, position1, position2,ctype):
+    def __createRepulsionsObject(self, position1, position2,ctype,distance=repulsivePair.default_distance):
         idx = len(self.repulsive.keys()) + 1
         if isinstance(position1,atomPosition):
             index1 = position1.index
@@ -1123,6 +1147,9 @@ class Topology:
             repulsion_distance = repulsivePair.default_distance
         elif ctype=='cadna':
             repulsion_distance = repulsivePair.protDNA_distance
+        elif ctype=='custom':
+            repulsion_distance = distance
+
         repulsion_object = repulsivePair(idx,
                                 index1,
                                 index2,
@@ -1138,9 +1165,9 @@ class Topology:
             value.idx = count
             count+=1
 
-    def removeContact(self, key,ctype='caca'):
+    def removeContact(self, key,ctype='caca',distance=repulsivePair.default_distance):
         try:
-            repulsion_object = self.__createRepulsionsObject(key[0],key[1],ctype)
+            repulsion_object = self.__createRepulsionsObject(key[0],key[1],ctype,distance)
             self.repulsive[repulsion_object.idx] = repulsion_object
             del self.contacts[key]
         except:

@@ -1,16 +1,10 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
 
 import re
 import sys
 import numpy as np
+from com.calculations import *
 
-# In[2]:
-
-
+#%% ------------------------------------------------------------------------
 class atom:
     """
     Atributes::  index, name (CA in coarse grained simulations),
@@ -61,11 +55,9 @@ class atom:
         
     def __str__(self):
         return f'{self.index} {self.name} {self.aa}\n'
+# ------------------------------------------------------------------------
 
-
-# In[3]:
-
-
+#%% ------------------------------------------------------------------------
 class structure:
     """
     Atributes:: n_atoms, atoms (dictionary)
@@ -90,11 +82,9 @@ class structure:
             for atom in chain.values():
                 totalQ += atom.charge
         return totalQ
+# ------------------------------------------------------------------------
 
-
-# In[1]:
-
-
+#%% ------------------------------------------------------------------------
 class coordinate:
     """
     Atributes:: x, y, z, pos
@@ -113,11 +103,9 @@ class coordinate:
     def get_distance(self, coord):
         distance = np.linalg.norm(self.pos - coord.pos) #in nm
         return distance
+# ------------------------------------------------------------------------
 
-
-# In[5]:
-
-
+#%% ------------------------------------------------------------------------
 class step:
     """
     Atributes:: n_step, coordinates
@@ -128,14 +116,16 @@ class step:
     def __init__(self,n_step, n_atoms):
         self.n = n_step
         self.coordinates = np.zeros(n_atoms, dtype = object)
+        self.array = np.zeros([n_atoms,3])
         
     def append(self, coord, i):
         self.coordinates[i] = coord
+        self.array[i][0] = coord.x
+        self.array[i][1] = coord.y
+        self.array[i][2] = coord.z
+# ------------------------------------------------------------------------
 
-
-# In[6]:
-
-
+#%% ------------------------------------------------------------------------
 class timesteps:
     """
     Atributes:: n_steps, steps
@@ -150,11 +140,9 @@ class timesteps:
     
     def append(self,step):
         self.steps[(step.n // self.step_jump) - 1] = step
+# ------------------------------------------------------------------------
 
-
-# In[7]:
-
-
+#%% ------------------------------------------------------------------------
 class Trajectory:
     """
     Atributes:: structure, timesteps
@@ -162,19 +150,32 @@ class Trajectory:
     The trajectory class object holds structure class (basically atoms)
     and the timesteps with coordinates at each step for each atom
     """
-    def __init__(self,n_atoms, n_steps, temperature):
+    def __init__(self,n_atoms, n_steps, temperature,randnum):
         self.structure   = structure(n_atoms)
         self.timesteps   = timesteps(n_steps)
         self.temperature = temperature
+        self.randnum     = randnum
         
     def print(self):
         print(f'The following trajectory contains {self.structure.n_atoms} atoms\n            The number of steps is {self.timesteps.n_steps/self.timesteps.step_jump:.1E}\n            Total simulation time is {self.timesteps.n_steps:.1E}            The temperature in this run was {self.temperature}\n'
             )
 
+    def caculateCOMpositions(self,rng):
+        print(' Calculating COM positions '.center(40,'='))
+        COMpositions = np.zeros((self.timesteps.n_steps,3))
+        for i in range(len(self.timesteps.steps)):
+            COMpositions[i] = self.__calculateCOMposition(i,rng)
+        print(' COM positions calculated '.center(40,'='))
+        return COMpositions
 
-# In[10]:
+    def __calculateCOMposition(self,step,rng):
+        tmstp = self.timesteps.steps[step]
+        array = tmstp.array
+        com = np.mean(array[rng[0]-1:rng[1]-1],axis=0)
+        return com
+# ------------------------------------------------------------------------
 
-
+#%% ------------------------------------------------------------------------
 class TrajectoryFile:
     """
     Attributes:: filename
@@ -193,10 +194,11 @@ class TrajectoryFile:
         with open(self.filename) as trj:
             n_atoms, n_steps, n_chain = self.__getAtomsAttributes(trj)
             temperature = self.__getTemperature()
+            randnum = self.__getRandomNumber()
             print(f'The number of atoms is {n_atoms} in one chain\n')
             print(f'The number of steps in the trajectory is {n_steps}\n')
             print(f'The temperature in the trajectory is {temperature}\n')
-            self.__Traj = Trajectory(n_atoms, n_steps, temperature)
+            self.__Traj = Trajectory(n_atoms, n_steps, temperature, randnum)
             for i in range(n_chain+1):
                 line = trj.readline()
             self.__getAtoms(trj, n_atoms, n_chain)
@@ -204,7 +206,12 @@ class TrajectoryFile:
             assert str(n_atoms) in line
             self.__getSteps(trj,n_steps,n_atoms)
         return self.__Traj
-    
+
+    def __getRandomNumber(self):
+        split = self.filename.split('_')
+        randnum = int(split[-1].split('.')[0])
+        return randnum
+
     def __getTemperature(self):
         split = self.filename.split('_')
         temperature = float(split[-2])
@@ -261,10 +268,4 @@ class TrajectoryFile:
             return n_steps
         else:
             print('did not find the number of steps')
-
-
-# In[ ]:
-
-
-
-
+# ------------------------------------------------------------------------

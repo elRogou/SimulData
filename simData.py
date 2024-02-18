@@ -1,7 +1,7 @@
 # %%
 import numpy as np
 import glob
-from top.Toplogy_CG import *
+from top.Topology_CG import *
 from traj.Trajectory_CG import *
 from functions.CG_traj_analysis import *
 
